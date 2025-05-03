@@ -1,8 +1,35 @@
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# Model weights
+weights/
+*.pt
+*.pth
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Logs
+*.log
+
 data/
 .data/
-.ipynb_checkpoints/
-__pycache__/
 .DS_Store
 *.pyc
-venv/venv/
 
