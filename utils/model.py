@@ -17,8 +17,7 @@ class CustomVGG(nn.Module):
     and custom classification head.
     Parameters for the first convolutional blocks are freezed.
     
-    Returns class scores when in train mode.
-    Returns class probs and normalized feature maps when in eval mode.
+    Returns class scores (logits) for both train and eval mode.
     """
 
     def __init__(self, n_classes=2, activation=nn.ReLU, num_neurons=128):
@@ -43,33 +42,7 @@ class CustomVGG(nn.Module):
     def forward(self, x):
         feature_maps = self.feature_extractor(x)
         scores = self.classification_head(feature_maps)
-
-        if self.training:
-            return scores
-        else:
-            probs = nn.functional.softmax(scores, dim=-1)
-            
-            # Get the weights from the first linear layer (before ReLU)
-            weights = self.classification_head[3].weight  # Get weights from the first linear layer
-            weights = weights.unsqueeze(-1).unsqueeze(-1)  # Add spatial dimensions
-            
-            # Reshape feature maps for multiplication
-            feature_maps = feature_maps.unsqueeze(1)  # Add class dimension
-            
-            # Compute location map
-            location = torch.mul(weights, feature_maps).sum(dim=2)  # Sum over feature channels
-            
-            # Normalize location map
-            location = F.interpolate(location, size=INPUT_IMG_SIZE, mode="bilinear")
-            
-            # Normalize to [0, 1] range
-            maxs, _ = location.max(dim=-1, keepdim=True)
-            maxs, _ = maxs.max(dim=-2, keepdim=True)
-            mins, _ = location.min(dim=-1, keepdim=True)
-            mins, _ = mins.min(dim=-2, keepdim=True)
-            norm_location = (location - mins) / (maxs - mins + 1e-8)  # Add small epsilon to avoid division by zero
-            
-            return probs, norm_location
+        return scores
 
     @staticmethod
     def plot_training_curves(train_loss_history, val_loss_history, train_acc_history, val_acc_history):

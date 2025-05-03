@@ -24,7 +24,7 @@ def train(train_loader, val_loader, model, optimizer, criterion, epochs, device,
     }
     
     best_val_loss = float('inf')
-    patience = 5
+    patience = 10  # Increased patience for early stopping
     patience_counter = 0
     best_model_state = None
     
@@ -34,7 +34,7 @@ def train(train_loader, val_loader, model, optimizer, criterion, epochs, device,
         train_correct = 0
         train_total = 0
         
-        # Training phase
+        # Training phase with gradient clipping
         for inputs, labels in train_loader:
             inputs, labels = inputs.to(device), labels.to(device)
             
@@ -44,6 +44,10 @@ def train(train_loader, val_loader, model, optimizer, criterion, epochs, device,
                 outputs = outputs[0]
             loss = criterion(outputs, labels)
             loss.backward()
+            
+            # Add gradient clipping
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            
             optimizer.step()
             
             train_loss += loss.item()
@@ -80,13 +84,14 @@ def train(train_loader, val_loader, model, optimizer, criterion, epochs, device,
         if scheduler is not None:
             scheduler.step(val_loss)
         
-        # Early stopping check
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            patience_counter = 0
-            best_model_state = model.state_dict().copy()
-        else:
-            patience_counter += 1
+        # Early stopping check with minimum epochs
+        if epoch >= 5:  # Don't stop before 5 epochs
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                patience_counter = 0
+                best_model_state = model.state_dict().copy()
+            else:
+                patience_counter += 1
         
         # Store metrics
         history['train_loss'].append(train_loss)
@@ -146,9 +151,8 @@ def evaluate(model, dataloader, device, threshold=16.00):
             loss = criterion(outputs, labels)
             running_loss += loss.item()
             
-            # Apply threshold-based classification
-            probs = torch.softmax(outputs, dim=-1)
-            preds_class = (probs[:, 1] > threshold).long()  # Class 1 if probability > threshold
+            # Apply threshold-based classification using raw logits
+            preds_class = (outputs[:, 1] > threshold).long()  # Class 1 if logit > threshold
 
             labels = labels.to("cpu").numpy()
             preds_class = preds_class.detach().to("cpu").numpy()

@@ -145,12 +145,12 @@ def plot_parameter_analysis(results_df):
 
 ## Parameters
 
-batch_size = 32  # Will be varied
+batch_size = 16  # Reduced from 32 for better stability
 target_train_accuracy = 0.99  # Target for "golden model" with error < 0.01
 test_size = 0.2
-learning_rate = 0.001  # Will be varied
+learning_rate = 0.0001  # Reduced from 0.001 for better stability
 epochs = 15  # Balanced number of epochs
-class_weight = [1, 3] if NEG_CLASS == 1 else [3, 1]
+class_weight = [1, 2] if NEG_CLASS == 1 else [2, 1]  # Reduced class weight imbalance
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 classification_threshold = 16.00  # As specified in requirements
 heatmap_thres = 0.7
@@ -247,11 +247,11 @@ if existing_weights:
         sys.exit(0)
 
 # Parameter grids for experiments - balanced combinations
-activations = [nn.ReLU, nn.LeakyReLU, nn.ELU]  # Three different activation functions
+activations = [nn.ReLU, nn.LeakyReLU]  # Reduced to two activation functions
 num_neurons_list = [64, 128]  # Two different neuron counts
-learning_rates = [0.01, 0.001]  # Two different learning rates
-optimizers = [optim.Adam, optim.SGD]  # Two different optimizers
-batch_sizes = [32, 64]  # Two different batch sizes
+learning_rates = [0.0001, 0.0005]  # Reduced learning rates
+optimizers = [optim.Adam]  # Only use Adam for better stability
+batch_sizes = [16, 32]  # Reduced batch sizes
 
 # Create a DataFrame to store all results
 results_df = pd.DataFrame(columns=[
@@ -335,10 +335,17 @@ try:
 
         class_weight_tensor = torch.tensor(class_weight).type(torch.FloatTensor).to(device)
         criterion = nn.CrossEntropyLoss(weight=class_weight_tensor)
-        optimizer = optimizer_class(model.parameters(), lr=lr)
+        optimizer = optimizer_class(model.parameters(), lr=lr, weight_decay=1e-4)  # Added weight decay
         
-        # Initialize scheduler with more patience
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5)
+        # Initialize scheduler with more patience and higher minimum learning rate
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, 
+            mode='min', 
+            factor=0.5, 
+            patience=5,  # Increased patience
+            min_lr=1e-5,  # Higher minimum learning rate
+            verbose=True  # Added verbose output
+        )
 
         # Train
         print("\nStarting training...")
@@ -384,7 +391,7 @@ try:
         balanced_acc = balanced_accuracy_score(y_true, y_pred)
 
         # Add results to DataFrame
-        results_df = results_df.append({
+        new_row = {
             'activation': activation.__name__,
             'num_neurons': num_neurons,
             'learning_rate': lr,
@@ -396,7 +403,8 @@ try:
             'precision': precision,
             'recall': recall,
             'f1_score': f1
-        }, ignore_index=True)
+        }
+        results_df = pd.concat([results_df, pd.DataFrame([new_row])], ignore_index=True)
 
         # Save results after each experiment
         results_df.to_csv('results/metrics/experiment_results.csv', index=False)
@@ -424,6 +432,11 @@ try:
         print(f"Accuracy: {accuracy:.4f}")
         print(f"Loss: {loss:.4f}")
         print(f"Progress: {current_combination}/{total_combinations} combinations completed")
+
+        print(np.bincount(y_true))
+        print(np.bincount(y_pred))
+
+        print("Sample outputs:", outputs[:, 1][:10].cpu().numpy())
 
     # After all experiments, create parameter analysis plots
     print("\nGenerating parameter analysis plots...")
