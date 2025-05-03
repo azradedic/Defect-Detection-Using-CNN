@@ -1,0 +1,2 @@
+activation,num_neurons,learning_rate,optimizer,batch_size,accuracy,loss,balanced_accuracy,precision,recall,f1_score
+ReLU,64,0.0001,Adam,16,0.6580882352941176,10.699657124631544,0.5769323671497584,0.6336577440392674,0.6580882352941176,0.6370041622787223

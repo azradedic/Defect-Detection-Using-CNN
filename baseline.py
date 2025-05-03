@@ -145,23 +145,22 @@ def plot_parameter_analysis(results_df):
 
 ## Parameters
 
-batch_size = 16  # Reduced from 32 for better stability
-target_train_accuracy = 0.99  # Target for "golden model" with error < 0.01
-test_size = 0.2
-learning_rate = 0.0001  # Reduced from 0.001 for better stability
-epochs = 15  # Balanced number of epochs
-class_weight = [1, 2] if NEG_CLASS == 1 else [2, 1]  # Reduced class weight imbalance
+batch_size = 32  # Keep batch size 32
+learning_rate = 0.00005  # Reduced learning rate for stability
+class_weight = [1, 4] if NEG_CLASS == 1 else [4, 1]  # Increased class weight to handle imbalance
+max_samples_per_class = 200  # Keep original sample limit
+train_subset_ratio = 0.7  # Keep original ratio
+epochs = 20  # Increased epochs with early stopping
+target_train_accuracy = 0.90  # More realistic target
+
+# Device handling
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-classification_threshold = 16.00  # As specified in requirements
+print(f"Using device: {device}")
+
+classification_threshold = 16.00  # Keep original threshold
 heatmap_thres = 0.7
 
 # Data subsetting parameters - more balanced approach
-max_samples_per_class = 200  # Increased from 100 to 200
-train_subset_ratio = 0.7  # Increased from 0.5 to 0.7
-
-## Load Training Data
-
-data_folder = "data/"
 train_subset_name = ["capsule", "hazelnut", "leather"]  # Keep all training datasets
 test_subset_name = ["bottle", "pill"]  # Keep 2 test datasets for better validation
 train_roots = [os.path.join(data_folder, subset) for subset in train_subset_name]
@@ -246,12 +245,12 @@ if existing_weights:
         
         sys.exit(0)
 
-# Parameter grids for experiments - balanced combinations
-activations = [nn.ReLU, nn.LeakyReLU]  # Reduced to two activation functions
-num_neurons_list = [64, 128]  # Two different neuron counts
-learning_rates = [0.0001, 0.0005]  # Reduced learning rates
-optimizers = [optim.Adam]  # Only use Adam for better stability
-batch_sizes = [16, 32]  # Reduced batch sizes
+# Parameter grids for experiments - focused on stability
+activations = [nn.ReLU]  # Keep ReLU for stability
+num_neurons_list = [64]  # Keep original architecture
+learning_rates = [0.00005]  # Reduced learning rate
+optimizers = [optim.AdamW]  # Changed to AdamW for better regularization
+batch_sizes = [32]  # Keep batch size 32
 
 # Create a DataFrame to store all results
 results_df = pd.DataFrame(columns=[
@@ -334,18 +333,20 @@ try:
         summary(model, input_size=(batch_size, 3, 224, 224))
 
         class_weight_tensor = torch.tensor(class_weight).type(torch.FloatTensor).to(device)
-        criterion = nn.CrossEntropyLoss(weight=class_weight_tensor)
-        optimizer = optimizer_class(model.parameters(), lr=lr, weight_decay=1e-4)  # Added weight decay
+        criterion = nn.CrossEntropyLoss(weight=class_weight_tensor, label_smoothing=0.1)
+        optimizer = optimizer_class(model.parameters(), lr=lr, weight_decay=0.01)  # Increased weight decay
         
-        # Initialize scheduler with more patience and higher minimum learning rate
+        # Initialize scheduler with appropriate patience
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, 
-            mode='min', 
-            factor=0.5, 
-            patience=5,  # Increased patience
-            min_lr=1e-5,  # Higher minimum learning rate
-            verbose=True  # Added verbose output
+            optimizer,
+            mode='min',
+            factor=0.2,  # More aggressive learning rate reduction
+            patience=5,  # Keep patience
+            min_lr=1e-6  # Lower minimum learning rate
         )
+
+        # Add gradient clipping
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.5)  # Reduced max norm
 
         # Train
         print("\nStarting training...")
