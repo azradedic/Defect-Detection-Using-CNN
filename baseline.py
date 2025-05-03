@@ -160,6 +160,9 @@ print(f"Using device: {device}")
 classification_threshold = 16.00  # Keep original threshold
 heatmap_thres = 0.7
 
+# Define data folder path
+data_folder = "data"  # Path to the data directory
+
 # Data subsetting parameters - more balanced approach
 train_subset_name = ["capsule", "hazelnut", "leather"]  # Keep all training datasets
 test_subset_name = ["bottle", "pill"]  # Keep 2 test datasets for better validation
