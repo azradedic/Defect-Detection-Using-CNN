@@ -5,207 +5,155 @@ nb = nbf.v4.new_notebook()
 
 # Define the cells
 cells = [
-    nbf.v4.new_markdown_cell("# Anomaly Detection Training\n\nThis notebook implements the training and evaluation of the anomaly detection model using the CustomVGG architecture."),
+    nbf.v4.new_markdown_cell("# Anomaly Detection Training\n\nThis notebook implements the training and evaluation of the anomaly detection model using the CustomVGG architecture, matching the latest codebase."),
     
     nbf.v4.new_code_cell("""import os
-import sys
-
-# Add the project root directory to Python path
-sys.path.append(os.path.dirname(os.path.abspath("__file__")))
-
-import numpy as np
-import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torchinfo import summary
-import itertools
-import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
 import seaborn as sns
+import pandas as pd
+from torch.cuda.amp import autocast, GradScaler
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+from sklearn.metrics import precision_score, recall_score, f1_score, balanced_accuracy_score
 import gc
 
 from utils.dataloader import get_train_loaders, get_test_loaders
 from utils.model import CustomVGG
-from utils.helper import train, evaluate, predict_localize
-from utils.constants import NEG_CLASS
+from utils.helper import train, evaluate, plot_dataset_comparison
+from utils.constants import NEG_CLASS, INPUT_IMG_SIZE
 
-# Add safe globals for model loading
-torch.serialization.add_safe_globals([torch.nn.modules.activation.ReLU])"""),
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print(f'Using device: {device}')
+"""),
     
     nbf.v4.new_markdown_cell("## Set Parameters"),
     
-    nbf.v4.new_code_cell("""# Training parameters
-batch_size = 40
-target_train_accuracy = 0.98  # for early stopping
-test_size = 0.2  # for validation split
-learning_rate = 0.0001
-epochs = 10
-class_weight = [1, 3] if NEG_CLASS == 1 else [3, 1]  # Good = 1, Anomaly = 3
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-heatmap_thres = 0.7
-
-print(f"Using device: {device}")"""),
+    nbf.v4.new_code_cell("""BATCH_SIZE = 32
+LEARNING_RATE = 0.0005
+NUM_EPOCHS = 20
+CLASS_WEIGHTS = torch.tensor([1.0, 3.0])
+CLASSIFICATION_THRESHOLD = 16.00
+"""),
     
-    nbf.v4.new_markdown_cell("## Load Data"),
+    nbf.v4.new_markdown_cell("## Data Loading"),
     
-    nbf.v4.new_code_cell("""data_folder = "data/"
-train_subset_name = ["capsule", "hazelnut", "leather"]
-test_subset_name = ["bottle", "pill", "wood"]
-train_roots = [os.path.join(data_folder, subset) for subset in train_subset_name]
-test_roots = [os.path.join(data_folder, subset) for subset in test_subset_name]
-
-train_loader = get_train_loaders(
-    roots=train_roots,
-    batch_size=batch_size,
-    random_state=42
-)"""),
+    nbf.v4.new_code_cell("""train_loader, val_loader = get_train_loaders(BATCH_SIZE)
+test_loader = get_test_loaders(BATCH_SIZE)
+print(f'Train batches: {len(train_loader)}, Validation batches: {len(val_loader)}, Test batches: {len(test_loader)}')
+"""),
     
-    nbf.v4.new_markdown_cell("## Model Setup\n\nChoose whether to load an existing model or train a new one."),
+    nbf.v4.new_markdown_cell("## Model Initialization"),
     
-    nbf.v4.new_code_cell("""# List available models
-weight_files = [f for f in os.listdir("weights") if f.endswith(".pt")]
-if weight_files:
-    print("Available models:")
-    for i, file in enumerate(weight_files):
-        print(f"{i+1}. {file}")
-else:
-    print("No saved models found in weights directory")"""),
+    nbf.v4.new_code_cell("""activation = nn.ReLU
+num_neurons = 64
+model = CustomVGG(activation=activation, num_neurons=num_neurons).to(device)
+criterion = nn.CrossEntropyLoss(weight=CLASS_WEIGHTS.to(device), label_smoothing=0.1)
+optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=0.01)
+scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=3, verbose=True)
+"""),
     
-    nbf.v4.new_markdown_cell("### Option 1: Load Existing Model"),
+    nbf.v4.new_markdown_cell("## Training"),
     
-    nbf.v4.new_code_cell("""# Uncomment and modify to load a specific model
-# model_idx = 0  # Change this to load a different model
-# model_path = os.path.join("weights", weight_files[model_idx])
-# try:
-#     # First try loading with weights_only=True
-#     checkpoint = torch.load(model_path, map_location=device, weights_only=True)
-# except Exception as e:
-#     print(f"Loading with weights_only=True failed: {e}")
-#     print("Trying to load with weights_only=False...")
-#     checkpoint = torch.load(model_path, map_location=device, weights_only=False)
-# 
-# model = CustomVGG(activation=nn.ReLU, num_neurons=64).to(device)
-# model.load_state_dict(checkpoint['model_state_dict'])
-# print(f"Loaded model from {weight_files[model_idx]}")"""),
-    
-    nbf.v4.new_markdown_cell("### Option 2: Train New Model"),
-    
-    nbf.v4.new_code_cell("""# Experiment parameters
-activations = [nn.ReLU, nn.Tanh]
-num_neurons_list = [64, 128]
-learning_rates = [0.001, 0.0001]
-optimizers = [optim.Adam, optim.SGD]
-batch_sizes = [32, 64]
-epochs_list = [10, 20]
-
-# Choose parameters for this run
-current_params = {
-    'activation': nn.ReLU,
-    'num_neurons': 64,
-    'lr': 0.0001,
-    'optimizer_class': optim.Adam,
-    'batch_size': 40,
-    'epochs': 10
-}
-
-# Create and display model
-model = CustomVGG(
-    activation=current_params['activation'],
-    num_neurons=current_params['num_neurons']
-).to(device)
-
-summary(model, input_size=(current_params['batch_size'], 3, 224, 224))"""),
-    
-    nbf.v4.new_code_cell("""# Setup training
-class_weight_tensor = torch.tensor(class_weight).type(torch.FloatTensor).to(device)
-criterion = nn.CrossEntropyLoss(weight=class_weight_tensor)
-optimizer = current_params['optimizer_class'](model.parameters(), lr=current_params['lr'])
-scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3)
-
-# Create validation loader
-val_loader = get_test_loaders(
-    roots=train_roots,
-    batch_size=current_params['batch_size'],
-    test_size=0.2,
-    random_state=42
+    nbf.v4.new_code_cell("""model, history = train(
+    train_loader, val_loader, model, optimizer, criterion,
+    NUM_EPOCHS, device, target_train_accuracy=0.90, scheduler=scheduler
 )
-
-# Train model
-trained_model, history = train(
-    train_loader,
-    val_loader,
-    model,
-    optimizer,
-    criterion,
-    current_params['epochs'],
-    device,
-    target_train_accuracy,
-    scheduler
-)"""),
+"""),
     
-    nbf.v4.new_markdown_cell("## Save Model"),
+    nbf.v4.new_markdown_cell("## Plot Training Curves"),
     
-    nbf.v4.new_code_cell("""# Create experiment name and save model
-experiment_name = f"{current_params['activation'].__name__}_{current_params['num_neurons']}_lr{current_params['lr']}_{current_params['optimizer_class'].__name__}_bs{current_params['batch_size']}_ep{current_params['epochs']}"
-
-torch.save({
-    'model_state_dict': trained_model.state_dict(),
-    'optimizer_state_dict': optimizer.state_dict(),
-    'activation': current_params['activation'],
-    'num_neurons': current_params['num_neurons'],
-    'learning_rate': current_params['lr'],
-    'optimizer': current_params['optimizer_class'].__name__,
-    'batch_size': current_params['batch_size'],
-    'epochs': current_params['epochs'],
-    'history': history
-}, f"weights/model_{experiment_name}.pt")
-
-print(f"Model saved as: model_{experiment_name}.pt")"""),
-    
-    nbf.v4.new_markdown_cell("## Evaluate Model"),
-    
-    nbf.v4.new_code_cell("""# Load test data
-test_loader = get_test_loaders(
-    roots=test_roots,
-    batch_size=current_params['batch_size'],
-    test_size=0.9,
-    random_state=42
-)
-
-# Evaluate model
-accuracy, loss = evaluate(trained_model, test_loader, device)
-print(f"Final Test Accuracy: {accuracy:.4f}")
-print(f"Final Test Loss: {loss:.4f}")"""),
-    
-    nbf.v4.new_markdown_cell("## Visualize Results"),
-    
-    nbf.v4.new_code_cell("""# Plot training curves
-plt.figure(figsize=(12, 4))
+    nbf.v4.new_code_cell("""plt.figure(figsize=(12, 4))
 plt.subplot(1, 2, 1)
 plt.plot(history['train_loss'], label='Train Loss')
 plt.plot(history['val_loss'], label='Val Loss')
 plt.title('Loss Curves')
 plt.legend()
-
 plt.subplot(1, 2, 2)
 plt.plot(history['train_acc'], label='Train Acc')
 plt.plot(history['val_acc'], label='Val Acc')
 plt.title('Accuracy Curves')
 plt.legend()
-
-plt.tight_layout()
-plt.show()"""),
+plt.show()
+"""),
     
-    nbf.v4.new_code_cell("""# Visualize predictions and localization
-predict_localize(
-    trained_model,
-    test_loader,
-    device,
-    thres=heatmap_thres,
-    n_samples=9,
-    show_heatmap=True
-)""")
+    nbf.v4.new_markdown_cell("## Evaluation"),
+    
+    nbf.v4.new_code_cell("""accuracy, loss, conf_matrix = evaluate(model, test_loader, device)
+print(f'Accuracy: {accuracy:.4f}, Loss: {loss:.4f}')
+"""),
+    
+    nbf.v4.new_markdown_cell("## Additional Metrics"),
+    
+    nbf.v4.new_code_cell("""y_true = []
+y_pred = []
+with torch.no_grad():
+    for inputs, labels in test_loader:
+        inputs = inputs.to(device)
+        outputs = model(inputs)
+        if isinstance(outputs, tuple):
+            outputs = outputs[0]
+        preds = (outputs[:, 1] > CLASSIFICATION_THRESHOLD).long()
+        y_true.extend(labels.cpu().numpy())
+        y_pred.extend(preds.cpu().numpy())
+balanced_acc = balanced_accuracy_score(y_true, y_pred)
+precision = precision_score(y_true, y_pred, average='weighted')
+recall = recall_score(y_true, y_pred, average='weighted')
+f1 = f1_score(y_true, y_pred, average='weighted')
+print(f'Balanced Accuracy: {balanced_acc:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}')
+"""),
+    
+    nbf.v4.new_markdown_cell("## Save Model"),
+    
+    nbf.v4.new_code_cell("""os.makedirs('weights', exist_ok=True)
+torch.save(model.state_dict(), 'weights/trained_model.pt')
+print('Model saved to weights/trained_model.pt')
+"""),
+    
+    nbf.v4.new_markdown_cell("## Results & Metrics"),
+    
+    nbf.v4.new_code_cell("""results_df = pd.read_csv('results/metrics/experiment_results.csv')
+print('Columns in results:', results_df.columns.tolist())
+import os
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+def safe_boxplot(x, y, title, filename):
+    if x in results_df.columns and y in results_df.columns:
+        plt.figure(figsize=(8, 5))
+        sns.boxplot(x=x, y=y, data=results_df)
+        plt.title(title)
+        plt.tight_layout()
+        plt.savefig(os.path.join('results/plots/parameter_analysis/', filename))
+        plt.close()
+        print(f"Saved: {filename}")
+
+# Learning Rate Impact
+if 'learning_rate' in results_df.columns and 'accuracy' in results_df.columns and 'optimizer' in results_df.columns:
+    plt.figure(figsize=(10, 5))
+    sns.lineplot(x='learning_rate', y='accuracy', hue='optimizer', data=results_df, marker='o')
+    plt.title('Accuracy vs Learning Rate')
+    plt.xscale('log')
+    plt.tight_layout()
+    plt.savefig('results/plots/parameter_analysis/learning_rate_impact.png')
+    plt.close()
+    print("Saved: learning_rate_impact.png")
+
+safe_boxplot('optimizer', 'accuracy', 'Accuracy by Optimizer', 'optimizer_comparison.png')
+safe_boxplot('activation', 'accuracy', 'Accuracy by Activation Function', 'activation_impact.png')
+safe_boxplot('num_neurons', 'accuracy', 'Accuracy by Number of Neurons', 'neurons_impact.png')
+safe_boxplot('batch_size', 'accuracy', 'Accuracy by Batch Size', 'batch_size_impact.png')
+
+if 'balanced_accuracy' in results_df.columns:
+    safe_boxplot('optimizer', 'balanced_accuracy', 'Balanced Accuracy by Optimizer', 'optimizer_balanced_accuracy.png')
+    safe_boxplot('activation', 'balanced_accuracy', 'Balanced Accuracy by Activation Function', 'activation_balanced_accuracy.png')
+    safe_boxplot('num_neurons', 'balanced_accuracy', 'Balanced Accuracy by Number of Neurons', 'neurons_balanced_accuracy.png')
+    safe_boxplot('batch_size', 'balanced_accuracy', 'Balanced Accuracy by Batch Size', 'batch_size_balanced_accuracy.png')
+
+print("Parameter analysis plots generated.")
+""")
 ]
 
 # Add the cells to the notebook
