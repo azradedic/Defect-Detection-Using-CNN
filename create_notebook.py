@@ -26,8 +26,7 @@ from utils.helper import train, evaluate, plot_dataset_comparison
 from utils.constants import NEG_CLASS, INPUT_IMG_SIZE
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-print(f'Using device: {device}')
-"""),
+print(f'Using device: {device}')"""),
     
     nbf.v4.new_markdown_cell("## Set Parameters"),
     
@@ -46,8 +45,7 @@ CLASSIFICATION_THRESHOLD = 16.00
 WEIGHT_DECAY = 1e-4
 SCHEDULER_FACTOR = 0.5
 SCHEDULER_PATIENCE = 5
-MIN_LR = 1e-5
-"""),
+MIN_LR = 1e-5"""),
     
     nbf.v4.new_markdown_cell("## Data Loading"),
     
@@ -56,8 +54,7 @@ test_loader = get_test_loaders(BATCH_SIZE)
 print(f'Train batches: {len(train_loader)}, Validation batches: {len(val_loader)}, Test batches: {len(test_loader)}')
 
 # Plot dataset comparison
-plot_dataset_comparison(train_loader, test_loader, device)
-"""),
+plot_dataset_comparison(train_loader, test_loader, device)"""),
     
     nbf.v4.new_markdown_cell("## Model Initialization"),
     
@@ -74,16 +71,14 @@ scheduler = ReduceLROnPlateau(
 )
 
 # Show model summary
-model.show_summary(batch_size=BATCH_SIZE)
-"""),
+model.show_summary(batch_size=BATCH_SIZE)"""),
     
     nbf.v4.new_markdown_cell("## Training"),
     
     nbf.v4.new_code_cell("""model, history = train(
     train_loader, val_loader, model, optimizer, criterion,
     NUM_EPOCHS, device, target_train_accuracy=0.90, scheduler=scheduler
-)
-"""),
+)"""),
     
     nbf.v4.new_markdown_cell("## Plot Training Curves"),
     
@@ -98,14 +93,12 @@ plt.plot(history['train_acc'], label='Train Acc')
 plt.plot(history['val_acc'], label='Val Acc')
 plt.title('Accuracy Curves')
 plt.legend()
-plt.show()
-"""),
+plt.show()"""),
     
     nbf.v4.new_markdown_cell("## Evaluation"),
     
     nbf.v4.new_code_cell("""accuracy, loss, conf_matrix = evaluate(model, test_loader, device, threshold=CLASSIFICATION_THRESHOLD)
-print(f'Accuracy: {accuracy:.4f}, Loss: {loss:.4f}')
-"""),
+print(f'Accuracy: {accuracy:.4f}, Loss: {loss:.4f}')"""),
     
     nbf.v4.new_markdown_cell("## Additional Metrics"),
     
@@ -132,11 +125,10 @@ print(f'Recall: {recall:.4f}')
 print(f'F1 Score: {f1:.4f}')
 
 # Print class distribution
-print("\nClass distribution in predictions:")
+print("\\nClass distribution in predictions:")
 print(np.bincount(y_pred))
-print("\nClass distribution in true labels:")
-print(np.bincount(y_true))
-"""),
+print("\\nClass distribution in true labels:")
+print(np.bincount(y_true))"""),
     
     nbf.v4.new_markdown_cell("## Save Model"),
     
@@ -179,8 +171,7 @@ if os.path.exists('results/metrics/experiment_results.csv'):
     existing_df = pd.read_csv('results/metrics/experiment_results.csv')
     metrics_df = pd.concat([existing_df, metrics_df], ignore_index=True)
 metrics_df.to_csv('results/metrics/experiment_results.csv', index=False)
-print('Metrics saved to results/metrics/experiment_results.csv')
-""")
+print('Metrics saved to results/metrics/experiment_results.csv')""")
 ]
 
 # Add the cells to the notebook
