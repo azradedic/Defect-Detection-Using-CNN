@@ -36,129 +36,75 @@ torch.serialization.add_safe_globals([
 ])
 
 def plot_parameter_analysis(results_df):
-    """Create plots analyzing the impact of different parameters"""
-    # 1. Learning Rate Impact
-    plt.figure(figsize=(12, 4))
-    plt.subplot(1, 2, 1)
-    for opt in results_df['optimizer'].unique():
-        subset = results_df[results_df['optimizer'] == opt]
-        plt.plot(subset['learning_rate'], subset['accuracy'], 'o-', label=opt)
-    plt.xlabel('Learning Rate')
-    plt.ylabel('Accuracy')
-    plt.title('Impact of Learning Rate')
-    plt.legend()
-    plt.xscale('log')
-    
-    plt.subplot(1, 2, 2)
-    for opt in results_df['optimizer'].unique():
-        subset = results_df[results_df['optimizer'] == opt]
-        plt.plot(subset['learning_rate'], subset['loss'], 'o-', label=opt)
-    plt.xlabel('Learning Rate')
-    plt.ylabel('Loss')
-    plt.title('Impact of Learning Rate')
-    plt.legend()
-    plt.xscale('log')
-    plt.tight_layout()
-    plt.savefig('results/plots/parameter_analysis/learning_rate_impact.png')
-    plt.close()
+    out_dir = 'results/plots/parameter_analysis/'
+    os.makedirs(out_dir, exist_ok=True)
 
-    # 2. Optimizer Comparison
-    plt.figure(figsize=(12, 4))
-    plt.subplot(1, 2, 1)
-    sns.boxplot(x='optimizer', y='accuracy', data=results_df)
-    plt.title('Accuracy by Optimizer')
-    
-    plt.subplot(1, 2, 2)
-    sns.boxplot(x='optimizer', y='loss', data=results_df)
-    plt.title('Loss by Optimizer')
-    plt.tight_layout()
-    plt.savefig('results/plots/parameter_analysis/optimizer_comparison.png')
-    plt.close()
+    def safe_boxplot(x, y, title, filename):
+        if x in results_df.columns and y in results_df.columns:
+            plt.figure(figsize=(8, 5))
+            sns.boxplot(x=x, y=y, data=results_df)
+            plt.title(title)
+            plt.tight_layout()
+            plt.savefig(os.path.join(out_dir, filename))
+            plt.close()
+            print(f"Saved: {filename}")
 
-    # 3. Activation Function Impact
-    plt.figure(figsize=(12, 4))
-    plt.subplot(1, 2, 1)
-    sns.boxplot(x='activation', y='accuracy', data=results_df)
-    plt.title('Accuracy by Activation Function')
-    
-    plt.subplot(1, 2, 2)
-    sns.boxplot(x='activation', y='loss', data=results_df)
-    plt.title('Loss by Activation Function')
-    plt.tight_layout()
-    plt.savefig('results/plots/parameter_analysis/activation_impact.png')
-    plt.close()
+    # Learning Rate Impact
+    if 'learning_rate' in results_df.columns and 'accuracy' in results_df.columns and 'optimizer' in results_df.columns:
+        plt.figure(figsize=(10, 5))
+        sns.lineplot(x='learning_rate', y='accuracy', hue='optimizer', data=results_df, marker='o')
+        plt.title('Accuracy vs Learning Rate')
+        plt.xscale('log')
+        plt.tight_layout()
+        plt.savefig(os.path.join(out_dir, 'learning_rate_impact.png'))
+        plt.close()
+        print("Saved: learning_rate_impact.png")
 
-    # 4. Number of Neurons Impact
-    plt.figure(figsize=(12, 4))
-    plt.subplot(1, 2, 1)
-    sns.boxplot(x='num_neurons', y='accuracy', data=results_df)
-    plt.title('Accuracy by Number of Neurons')
-    
-    plt.subplot(1, 2, 2)
-    sns.boxplot(x='num_neurons', y='loss', data=results_df)
-    plt.title('Loss by Number of Neurons')
-    plt.tight_layout()
-    plt.savefig('results/plots/parameter_analysis/neurons_impact.png')
-    plt.close()
+    # Optimizer Comparison
+    safe_boxplot('optimizer', 'accuracy', 'Accuracy by Optimizer', 'optimizer_comparison.png')
 
-    # 5. Batch Size Impact
-    plt.figure(figsize=(12, 4))
-    plt.subplot(1, 2, 1)
-    sns.boxplot(x='batch_size', y='accuracy', data=results_df)
-    plt.title('Accuracy by Batch Size')
-    
-    plt.subplot(1, 2, 2)
-    sns.boxplot(x='batch_size', y='loss', data=results_df)
-    plt.title('Loss by Batch Size')
-    plt.tight_layout()
-    plt.savefig('results/plots/parameter_analysis/batch_size_impact.png')
-    plt.close()
+    # Activation Function Impact
+    safe_boxplot('activation', 'accuracy', 'Accuracy by Activation Function', 'activation_impact.png')
 
-    # 6. Epochs Impact
-    plt.figure(figsize=(12, 4))
-    plt.subplot(1, 2, 1)
-    sns.boxplot(x='epochs', y='accuracy', data=results_df)
-    plt.title('Accuracy by Number of Epochs')
-    
-    plt.subplot(1, 2, 2)
-    sns.boxplot(x='epochs', y='loss', data=results_df)
-    plt.title('Loss by Number of Epochs')
-    plt.tight_layout()
-    plt.savefig('results/plots/parameter_analysis/epochs_impact.png')
-    plt.close()
+    # Number of Neurons Impact
+    safe_boxplot('num_neurons', 'accuracy', 'Accuracy by Number of Neurons', 'neurons_impact.png')
 
-    # Save detailed analysis results
-    analysis_results = {
-        'best_accuracy': results_df['accuracy'].max(),
-        'best_loss': results_df['loss'].min(),
-        'best_params': results_df.loc[results_df['accuracy'].idxmax()].to_dict(),
-        'worst_params': results_df.loc[results_df['accuracy'].idxmin()].to_dict(),
-        'mean_accuracy': results_df['accuracy'].mean(),
-        'std_accuracy': results_df['accuracy'].std(),
-        'mean_loss': results_df['loss'].mean(),
-        'std_loss': results_df['loss'].std()
-    }
-    
-    with open('results/metrics/analysis_results.txt', 'w') as f:
-        for key, value in analysis_results.items():
-            f.write(f"{key}: {value}\n")
+    # Batch Size Impact
+    safe_boxplot('batch_size', 'accuracy', 'Accuracy by Batch Size', 'batch_size_impact.png')
+
+    # Balanced Accuracy plots (if present)
+    if 'balanced_accuracy' in results_df.columns:
+        safe_boxplot('optimizer', 'balanced_accuracy', 'Balanced Accuracy by Optimizer', 'optimizer_balanced_accuracy.png')
+        safe_boxplot('activation', 'balanced_accuracy', 'Balanced Accuracy by Activation Function', 'activation_balanced_accuracy.png')
+        safe_boxplot('num_neurons', 'balanced_accuracy', 'Balanced Accuracy by Number of Neurons', 'neurons_balanced_accuracy.png')
+        safe_boxplot('batch_size', 'balanced_accuracy', 'Balanced Accuracy by Batch Size', 'batch_size_balanced_accuracy.png')
+
+    print("Parameter analysis plots generated.")
 
 ## Parameters
 
-batch_size = 32  # Keep batch size 32
-learning_rate = 0.00005  # Reduced learning rate for stability
-class_weight = [1, 4] if NEG_CLASS == 1 else [4, 1]  # Increased class weight to handle imbalance
-max_samples_per_class = 200  # Keep original sample limit
-train_subset_ratio = 0.7  # Keep original ratio
-epochs = 20  # Increased epochs with early stopping
-target_train_accuracy = 0.90  # More realistic target
+batch_size = 16  # Reduced from 32 for better stability
+target_train_accuracy = 0.99  # Target for "golden model" with error < 0.01
+test_size = 0.2
+learning_rate = 0.0001  # Reduced from 0.001 for better stability
+epochs = 15  # Balanced number of epochs
+class_weight = [1, 2] if NEG_CLASS == 1 else [2, 1]  # Reduced class weight imbalance
 
 # Device handling
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(f"Using device: {device}")
-
-classification_threshold = 16.00  # Keep original threshold
+classification_threshold = 16.00  # As specified in requirements
 heatmap_thres = 0.7
+
+# Data subsetting parameters - more balanced approach
+max_samples_per_class = 200  # Increased from 100 to 200
+train_subset_ratio = 0.7  # Increased from 0.5 to 0.7
+
+# Parameter grids for experiments - balanced combinations
+activations = [nn.ReLU, nn.LeakyReLU]  # Reduced to two activation functions
+num_neurons_list = [64, 128]  # Two different neuron counts
+learning_rates = [0.0001, 0.0005]  # Reduced learning rates
+optimizers = [optim.Adam]  # Only use Adam for better stability
+batch_sizes = [16, 32]  # Reduced batch sizes
 
 # Define data folder path
 data_folder = "data"  # Path to the data directory
@@ -248,13 +194,6 @@ if existing_weights:
         
         sys.exit(0)
 
-# Parameter grids for experiments - focused on stability
-activations = [nn.ReLU]  # Keep ReLU for stability
-num_neurons_list = [64]  # Keep original architecture
-learning_rates = [0.00005]  # Reduced learning rate
-optimizers = [optim.AdamW]  # Changed to AdamW for better regularization
-batch_sizes = [32]  # Keep batch size 32
-
 # Create a DataFrame to store all results
 results_df = pd.DataFrame(columns=[
     'activation', 'num_neurons', 'learning_rate', 'optimizer', 'batch_size',
@@ -336,16 +275,17 @@ try:
         summary(model, input_size=(batch_size, 3, 224, 224))
 
         class_weight_tensor = torch.tensor(class_weight).type(torch.FloatTensor).to(device)
-        criterion = nn.CrossEntropyLoss(weight=class_weight_tensor, label_smoothing=0.1)
-        optimizer = optimizer_class(model.parameters(), lr=lr, weight_decay=0.01)  # Increased weight decay
+        criterion = nn.CrossEntropyLoss(weight=class_weight_tensor)
+        optimizer = optimizer_class(model.parameters(), lr=lr, weight_decay=1e-4)  # Added weight decay
         
-        # Initialize scheduler with appropriate patience
+        # Initialize scheduler with more patience and higher minimum learning rate
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer,
-            mode='min',
-            factor=0.2,  # More aggressive learning rate reduction
-            patience=5,  # Keep patience
-            min_lr=1e-6  # Lower minimum learning rate
+            optimizer, 
+            mode='min', 
+            factor=0.5, 
+            patience=5,  # Increased patience
+            min_lr=1e-5,  # Higher minimum learning rate
+            verbose=True  # Added verbose output
         )
 
         # Add gradient clipping
@@ -481,3 +421,26 @@ except Exception as e:
     print(f"\nAn error occurred: {str(e)}")
     import traceback
     traceback.print_exc()
+
+    [{
+	"resource": "/Users/azradedic/Downloads/IS_Zad_1_Grupa11 2/baseline.py",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "reportUndefinedVariable",
+		"target": {
+			"$mid": 1,
+			"path": "/microsoft/pyright/blob/main/docs/configuration.md",
+			"scheme": "https",
+			"authority": "github.com",
+			"fragment": "reportUndefinedVariable"
+		}
+	},
+	"severity": 4,
+	"message": "\"filename\" is not defined",
+	"source": "Pylance",
+	"startLineNumber": 48,
+	"startColumn": 47,
+	"endLineNumber": 48,
+	"endColumn": 55,
+	"modelVersionId": 1
+}]

@@ -46,7 +46,7 @@ def train(train_loader, val_loader, model, optimizer, criterion, epochs, device,
             loss.backward()
             
             # Add gradient clipping
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.5)  # Reduced max norm
             
             optimizer.step()
             
@@ -243,8 +243,14 @@ def predict_localize(
 
         for img_i in range(inputs.size(0)):
             img = transform_to_PIL(inputs[img_i])
-            class_pred = class_preds[img_i]
-            prob = probs[img_i]
+            if class_preds.ndim == 0:
+                class_pred = class_preds.item()
+            else:
+                class_pred = class_preds[img_i].item()
+            if probs.ndim == 0:
+                prob = probs.item()
+            else:
+                prob = probs[img_i].item()
             label = labels[img_i]
             heatmap = feature_maps[img_i][NEG_CLASS].detach().numpy()
 
