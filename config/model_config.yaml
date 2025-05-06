@@ -3,17 +3,31 @@ model:
   name: "CustomVGG"
   pretrained: true
   num_classes: 2
-  num_neurons: 64
-  activation: "ReLU"
+  num_neurons: 64  # or 128
+  activation: "ReLU"  # or "LeakyReLU"
 
 # Training Parameters
 training:
-  batch_size: 32
-  learning_rate: 0.001
-  epochs: 10
-  target_accuracy: 0.98
-  early_stopping_patience: 5
-  class_weights: [1, 3]  # [good, anomaly]
+  batch_size: 32  # or 16
+  learning_rate: 0.0005  # or 0.0001
+  epochs: 20
+  target_accuracy: 0.90
+  early_stopping_patience: 10
+  min_epochs: 5
+  class_weights: [1.0, 3.0]  # [good, anomaly]
+  classification_threshold: 16.00
+  label_smoothing: 0.1
+
+# Optimizer Parameters
+optimizer:
+  name: "AdamW"
+  weight_decay: 1e-4
+  scheduler:
+    mode: "min"
+    factor: 0.5
+    patience: 5
+    min_lr: 1e-5
+    verbose: true
 
 # Data Parameters
 data:
@@ -22,15 +36,19 @@ data:
   test_categories: ["bottle", "pill", "wood"]
   test_size: 0.2
   random_state: 42
+  max_samples_per_class: 200
+  train_subset_ratio: 0.7
 
 # Experiment Parameters
 experiment:
-  activations: ["ReLU", "Tanh"]
+  activations: ["ReLU", "LeakyReLU"]
   num_neurons_list: [64, 128]
-  learning_rates: [0.001, 0.0001]
-  optimizers: ["Adam", "SGD"]
-  batch_sizes: [32, 64]
-  epochs_list: [10, 20]
+  learning_rates: [0.0005, 0.0001]
+  batch_sizes: [32, 16]
+  weight_decay: 1e-4
+  scheduler_factor: 0.5
+  scheduler_patience: 5
+  min_lr: 1e-5
 
 # Paths
 paths:
@@ -38,4 +56,7 @@ paths:
   weights_dir: "weights"
   results_dir: "results"
   plots_dir: "results/plots"
-  metrics_dir: "results/metrics" 
+  metrics_dir: "results/metrics"
+  confusion_matrix_dir: "results/plots/confusion_matrices"
+  parameter_analysis_dir: "results/plots/parameter_analysis"
+  localization_dir: "results/plots/localization" 
